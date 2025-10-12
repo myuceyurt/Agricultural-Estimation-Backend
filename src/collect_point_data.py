@@ -1,8 +1,9 @@
+import os
 import ee
 import pandas as pd
 import base_gee
 
-def collect_point_data(lon, lat, date_start='2024-05-08', date_end='2024-06-08'):
+def collect_point_data(lon, lat, date_start='2024-05-08', date_end='2024-06-08', output_dir="data/processed"):
 
     base_gee.init()
 
@@ -10,7 +11,7 @@ def collect_point_data(lon, lat, date_start='2024-05-08', date_end='2024-06-08')
 
     # --- NDVI (MODIS) ---
     modis = (
-        ee.ImageCollection('MODIS/061/MOD13Q1')
+        ee.ImageCollection('MODIS/061/MOD13Q1') #TODO: MODIS yerine Sentinel-2 kullanabiliriz
         .filterBounds(point)
         .filterDate(date_start, date_end)
         .select('NDVI')
@@ -90,10 +91,13 @@ def collect_point_data(lon, lat, date_start='2024-05-08', date_end='2024-06-08')
     # --- NDVI ileri doldur ---
     merged['NDVI'] = merged['NDVI'].ffill()
 
+    os.makedirs(output_dir, exist_ok=True)
     filename = f"point_timeseries_{lat:.4f}_{lon:.4f}.csv"
-    merged.to_csv(filename, index=False, encoding='utf-8-sig')
 
-    print(f"\nVeriler başarıyla kaydedildi: {filename}")
+    full_path = os.path.join(output_dir, filename)
+    merged.to_csv(full_path, index=False, encoding='utf-8-sig')
+
+    print(f"\nVeriler başarıyla kaydedildi: {full_path}")
     print("\nMerged DataFrame (ilk 10 satır):")
     print(merged.head(10))
 
