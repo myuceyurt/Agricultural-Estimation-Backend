@@ -1,5 +1,4 @@
 import ee
-import sys
 import base_gee
 
 def get_image_thumbnail_url(lon, lat, date_start='2024-05-01', date_end='2024-09-30'):
