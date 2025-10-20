@@ -1,7 +1,7 @@
 import os
 import ee
 import pandas as pd
-import base_gee
+from . import base_gee
 
 def collect_point_data(lon, lat, date_start='2024-05-08', date_end='2024-06-08', output_dir="data/processed"):
 
