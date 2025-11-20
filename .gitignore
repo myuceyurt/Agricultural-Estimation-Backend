@@ -1,23 +1,10 @@
-# Sanal Ortam Klasörü
 venv/
-.env
-
-# Python cache dosyaları
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Jupyter Notebook checkpoint dosyaları
-.ipynb_checkpoints
-
-# IDE Konfigürasyon dosyaları
-.vscode/
-.idea/
-
-# İşletim sistemi dosyaları
 .DS_Store
-Thumbs.db
-
-# Processed data klasörleri
-data/processed/
+.idea/
+.vscode/
+*.joblib
+*.csv
+target/
+*.jar
+.env
