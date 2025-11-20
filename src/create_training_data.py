@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tuik.clean_tuik_data import clean_tuik_data
 from gee.collect_point_data import collect_point_data
 
-
 ILCE_KOORDINATLARI = {
     'Ahırlı': {'enlem': 37.4688, 'boylam': 32.1755},
     'Akören': {'enlem': 37.6650, 'boylam': 32.5180},
@@ -44,62 +43,13 @@ ILCE_KOORDINATLARI = {
     'Yunak': {'enlem': 38.8000, 'boylam': 31.7600},
 }
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    
 PROCESSED_DATA_DIR = PROJECT_ROOT / 'data' / 'processed'
 VERIM_FILE_PATH = PROCESSED_DATA_DIR / 'konya_bugday_verim.csv'
 FINAL_TRAINING_DATA_PATH = PROCESSED_DATA_DIR / 'final_training_data.csv'
 FINAL_TRAINING_DATA_WITH_SOIL_PATH = PROCESSED_DATA_DIR / 'final_training_data_with_soil.csv'
 
-
-def process_row(row):
-
-    ilce = row['Ilce']
-    yil = row['Yil']
-    
-    if ilce not in ILCE_KOORDINATLARI:
-        print(f"UYARI: '{ilce}' için koordinat bulunamadı. Bu satır atlanıyor.")
-        return None
-        
-    coords = ILCE_KOORDINATLARI[ilce]
-    lat, lon = coords['enlem'], coords['boylam']
-    
-    date_start = f"{yil}-03-01"
-    date_end = f"{yil}-08-31" # Büyüme sezonuna odaklan
-    
-    try:
-        daily_data_df = collect_point_data(lon, lat, date_start, date_end)
-    except Exception as e:
-        print(f"HATA: {ilce}-{yil} için GEE verisi çekilemedi: {e}. Bu satır atlanıyor.")
-        return None
-
-    if daily_data_df is None or daily_data_df.empty:
-        print(f"UYARI: {ilce}-{yil} için GEE verisi boş geldi. Bu satır atlanıyor.")
-        return None
-        
-    gee_features = {
-        'toplam_yagis_mm': daily_data_df['precip_mm'].sum(),
-        'maks_ndvi': daily_data_df['NDVI'].max(),
-        'ort_ndvi': daily_data_df['NDVI'].mean(),
-        'ort_temp_c': daily_data_df['temp_C'].mean()
-    }
-    
-    final_row = {
-        'nnokta_id': ilce,
-        'yil': yil,
-        'enlem': lat,
-        'boylam': lon,
-        **gee_features,
-        'verim_ton_hektar': row['Verim_Ton_Hektar']
-    }
-    return final_row
-
-
 def get_soil_properties_for_point(lon, lat):
-
-    print(f"SoilGrids Analiz: Enlem={lat}, Boylam={lon}")
-
     BASE_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query"
     params = {
         'lon': lon,
@@ -113,168 +63,163 @@ def get_soil_properties_for_point(lon, lat):
         response = requests.get(BASE_URL, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
-    except requests.exceptions.HTTPError as http_err:
-        print(f"SoilGrids HTTP Hatası ({lat},{lon}): {http_err}\n   - Sunucu Cevabı: {response.text}")
-        return None
-    except requests.exceptions.RequestException as req_err:
-        print(f"SoilGrids İstek Hatası ({lat},{lon}): {req_err}")
-        return None
-    except Exception as e:
-        print(f"SoilGrids Genel Hata ({lat},{lon}): {e}")
+    except Exception:
+        print(f"Toprak verisi alınamadı: lon={lon}, lat={lat}")
         return None
 
     processed_data = []
-    
     properties = data.get('properties', {})
     layers = properties.get('layers', [])
 
     for layer in layers:
         prop_name = layer.get('name', 'N/A')
-        
         for depth_info in layer.get('depths', []):
             depth_label = depth_info.get('label', 'N/A')
             values_dict = depth_info.get('values', {})
             value = values_dict.get('mean')
-            
             if value is None:
                 continue
 
             if prop_name in ["clay", "sand", "silt"]:
                 value /= 10
             elif prop_name == "phh2o":
-                value /= 10 
+                value /= 10
             elif prop_name == "soc":
                 value /= 10
 
             feature_name = f"soil_{prop_name}_{depth_label.replace('-', '_')}"
-            
-            processed_data.append({
-                'feature_name': feature_name,
-                'value': round(value, 2)
-            })
+            processed_data.append({'feature_name': feature_name, 'value': round(value, 2)})
 
     if not processed_data:
-        print(f"UYARI: {lat},{lon} için SoilGrids verisi bulunamadı/işlenemedi.")
         return None
 
     df = pd.DataFrame(processed_data)
     wide_df = df.set_index('feature_name').transpose()
     wide_df.reset_index(drop=True, inplace=True)
-    
     return wide_df
 
+def process_row(row):
+    ilce = row['Ilce']
+    yil = row['Yil']
+    
+    if ilce not in ILCE_KOORDINATLARI:
+        return None
+        
+    coords = ILCE_KOORDINATLARI[ilce]
+    lat, lon = coords['enlem'], coords['boylam']
+    
+    date_start = f"{yil}-03-01"
+    date_end = f"{yil}-08-31" 
+    
+    try:
+        gee_df = collect_point_data(
+            lon=lon,
+            lat=lat,
+            date_start=date_start,
+            date_end=date_end,
+            region_radius=5000
+        )
+    except Exception:
+        return None
+
+    if gee_df is None or gee_df.empty:
+        return None
+        
+    gee_features = gee_df.iloc[0].to_dict()
+    
+    final_row = {
+        'nnokta_id': ilce,
+        'yil': yil,
+        'enlem': lat,
+        'boylam': lon,
+        **gee_features,
+        'verim_ton_hektar': row['Verim_Ton_Hektar']
+    }
+    return final_row
 
 def main():
-    
     os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
     training_df = None
-
+    
     if not os.path.exists(FINAL_TRAINING_DATA_PATH):
-        print(f"'{FINAL_TRAINING_DATA_PATH}' bulunamadı. GEE verileri çekilerek oluşturuluyor...")
+        print(f"'{FINAL_TRAINING_DATA_PATH}' oluşturuluyor...")
         
         if not os.path.exists(VERIM_FILE_PATH):
-            print(f"'{VERIM_FILE_PATH}' bulunamadı. `clean_tuik_data` çalıştırılıyor...")
             try:
                 clean_tuik_data()
-                print("`clean_tuik_data` tamamlandı.")
             except Exception as e:
-                print(f"HATA: `clean_tuik_data` çalıştırılırken hata: {e}")
+                print(f"TUIK verisi hazırlanırken hata: {e}")
                 return
     
         try:
             verim_df = pd.read_csv(VERIM_FILE_PATH)
-            print(f"Verim verileri ('{VERIM_FILE_PATH}') başarıyla okundu.")
-        except FileNotFoundError:
-            print(f"HATA: Verim dosyası '{VERIM_FILE_PATH}' bulunamadı. `clean_tuik_data` çalışmasına rağmen dosya oluşmadı.")
-            return
         except Exception as e:
-            print(f"HATA: '{VERIM_FILE_PATH}' okunurken hata: {e}")
+            print(f"Verim dosyası okunamadı: {e}")
             return
        
         all_rows = []
-        MAX_WORKERS = 31 # İlçe sayısı kadar worker
+        MAX_WORKERS = 12
 
+        print(f"\n--- GEE Verileri İndiriliyor (Toplam {len(verim_df)} Satır) ---")
+        
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = [
-                executor.submit(process_row, row) 
-                for index, row in verim_df.iterrows()
-            ]
+            futures = [executor.submit(process_row, row) for _, row in verim_df.iterrows()]
             
-            print(f"Tüm {len(futures)} GEE görev {MAX_WORKERS} iş parçacığı ile başlatıldı...")
-            for future in tqdm(as_completed(futures), total=len(futures), desc="İlçeler İçin GEE Verisi İşleniyor"):
-                try:
-                    result = future.result()
-                    if result: 
-                        all_rows.append(result)
-                except Exception as e:
-                    print(f"Bir GEE iş parçacığında hata oluştu: {e}")
+            for future in tqdm(as_completed(futures), total=len(futures), unit="işlem", desc="GEE İndirme"):
+                result = future.result()
+                if result: 
+                    all_rows.append(result)
 
         if not all_rows:
-            print("HATA: Hiçbir GEE verisi işlenemedi. Çıkılıyor.")
+            print("Hata: GEE verisi oluşturulamadı.")
             return
 
         final_df = pd.DataFrame(all_rows)
+        final_df = final_df.dropna(axis=1, how='all')
         
-        desired_order = ['nnokta_id', 'yil', 'enlem', 'boylam']
-        final_columns = desired_order + [col for col in final_df.columns if col not in desired_order]
-        final_df = final_df.reindex(columns=final_columns)
+        cols = ['nnokta_id', 'yil', 'enlem', 'boylam']
+        remaining_cols = [c for c in final_df.columns if c not in cols and c != 'verim_ton_hektar']
+        final_order = cols + remaining_cols + ['verim_ton_hektar']
+        final_order = [c for c in final_order if c in final_df.columns]
         
+        final_df = final_df[final_order]
         final_df.to_csv(FINAL_TRAINING_DATA_PATH, index=False, encoding='utf-8-sig')
-        print(f"\nGEE verileriyle '{FINAL_TRAINING_DATA_PATH}' dosyası oluşturuldu.")
-        
         training_df = final_df.copy()
+        print(f"GEE aşaması tamamlandı: {FINAL_TRAINING_DATA_PATH}")
 
     else:
-        print(f"'{FINAL_TRAINING_DATA_PATH}' zaten mevcut. Dosya okunuyor...")
-        try:
-            training_df = pd.read_csv(FINAL_TRAINING_DATA_PATH)
-            print("Dosya başarıyla okundu.")
-        except Exception as e:
-            print(f"HATA: '{FINAL_TRAINING_DATA_PATH}' okunurken hata: {e}")
-            return
+        print(f"GEE verisi zaten var, okunuyor: {FINAL_TRAINING_DATA_PATH}")
+        training_df = pd.read_csv(FINAL_TRAINING_DATA_PATH)
 
-    if training_df is None:
-        print("HATA: GEE veri aşaması tamamlanamadı, 'training_df' boş. Çıkılıyor.")
+    if training_df is None or training_df.empty:
         return
 
-    print("\n--- SoilGrids Veri Ekleme Aşaması Başlatılıyor ---")
-
-    unique_locations = training_df[['nnokta_id', 'enlem', 'boylam']].drop_duplicates().reset_index(drop=True)
-    print(f"{len(unique_locations)} benzersiz ilçe konumu için toprak verisi çekilecek.")
+    print("\n--- SoilGrids Veri Ekleme Aşaması ---")
     
+    unique_locations = training_df[['nnokta_id', 'enlem', 'boylam']].drop_duplicates().reset_index(drop=True)
     all_soil_data = []
 
-    print("API hız limitine (5 istek/dakika) uymak için her ilçe arasında 13 saniye beklenecek.")
-
-    for index, loc_row in tqdm(unique_locations.iterrows(), total=unique_locations.shape[0], desc="İlçeler İçin Toprak Verisi Çekiliyor"):
+    for index, loc_row in tqdm(unique_locations.iterrows(), total=unique_locations.shape[0], desc="Toprak Verisi", unit="ilçe"):
         ilce = loc_row['nnokta_id']
         lat = loc_row['enlem']
         lon = loc_row['boylam']
         
         try:
             soil_data_wide = get_soil_properties_for_point(lon, lat)
-            
             if soil_data_wide is not None:
                 soil_data_wide['nnokta_id'] = ilce
                 all_soil_data.append(soil_data_wide)
-            else:
-                print(f"UYARI: {ilce} ({lat},{lon}) için toprak verisi alınamadı/bulunamadı. Bu ilçe için toprak sütunları boş (NaN) olacak.")
-                
-        except Exception as e:
-            print(f"HATA: {ilce} için SoilGrids işlenirken kritik hata: {e}")
+        except Exception:
+            pass 
         
         if index < len(unique_locations) - 1:
             time.sleep(13)
 
-    if not all_soil_data:
-        print("UYARI: Hiçbir ilçe için toprak verisi çekilemedi. Dosya yine de oluşturulacak ancak toprak sütunları olmayacak.")
-        final_df_with_soil = training_df.copy()
-    else:
+    if all_soil_data:
         final_soil_df = pd.concat(all_soil_data, ignore_index=True, sort=False)
-
-        print("\nTüm toprak verileri çekildi. Ana veri seti ile birleştiriliyor...")
-        
         final_df_with_soil = pd.merge(training_df, final_soil_df, on='nnokta_id', how='left')
+    else:
+        final_df_with_soil = training_df.copy()
     
     if 'verim_ton_hektar' in final_df_with_soil.columns:
         yield_col = final_df_with_soil.pop('verim_ton_hektar')
@@ -288,7 +233,6 @@ def main():
     print(final_df_with_soil.head(10).to_string())
     print("\n--- Yeni Veri Seti Sütun Bilgisi ---")
     final_df_with_soil.info()
-
 
 if __name__ == "__main__":
     main()
