@@ -1,4 +1,4 @@
-package main.java.com.yield.prediction.filter; // Kendi paket ismine dikkat et
+package main.java.com.yield.prediction.filter;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
