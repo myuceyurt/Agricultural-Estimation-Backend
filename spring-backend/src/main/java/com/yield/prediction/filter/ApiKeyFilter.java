@@ -1,4 +1,4 @@
-package main.java.com.yield.prediction.filter;
+package com.yield.prediction.filter;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
