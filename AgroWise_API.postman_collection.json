@@ -1,0 +1,85 @@
+{
+	"info": {
+		"_postman_id": "249ca58b-ccfd-4aab-90a6-74d4e394fd03",
+		"name": "Agrowise API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "50272795",
+		"_collection_link": "https://mertyuceyurt58-7966687.postman.co/workspace/Agricultural-Yield-Decision-Sup~3e1a43b6-26ff-4c26-8998-9e8d44eb3b95/collection/50272795-249ca58b-ccfd-4aab-90a6-74d4e394fd03?action=share&source=collection_link&creator=50272795"
+	},
+	"item": [
+		{
+			"name": "Get Yield Prediction",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "X-API-KEY",
+						"value": "{{api_key}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"lat\": 41.0,\n  \"lon\": 28.0,\n  \"hectare\": 15.5\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/api/ml/predict",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"ml",
+						"predict"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": ""
+		},
+		{
+			"key": "api_key",
+			"value": "",
+			"type": "default"
+		}
+	]
+}
