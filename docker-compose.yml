@@ -13,8 +13,9 @@ services:
     build: ./spring-backend
     ports:
       - "8080:8080"
-    container_name: agriculture-spring
+    container_name: agriculture-backend
     environment:
-      - AI_SERVICE_URL=http://ai-service:8000/predict
+      - PYTHON_SERVICE_URL=http://ai-service:8000
+      - APP_API_KEY=1234
     depends_on:
       - ai-service
