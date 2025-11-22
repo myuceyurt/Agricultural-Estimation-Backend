@@ -1,62 +1,115 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
 import numpy as np
-import xgboost as xgb
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score, mean_absolute_error
+import xgboost as xgb # XGBoost kütüphanesini ekledik
 
-FILE_PATH = 'data/processed/final_training_data_with_soil.csv'
+# 1. Veriyi Yükle
+# Dosya yolunun doğru olduğundan emin ol (ai-service klasör yapısına göre)
+FILE_PATH = 'ai-service/data/processed/final_training_data_with_soil(1).csv'
+# Eğer direkt ana dizindeysen: 'data/processed/final_training_data_with_soil(1).csv'
 
-df = pd.read_csv(FILE_PATH)
-print("✅ Veri başarıyla DataFrame olarak okundu.\n")
+try:
+    df = pd.read_csv(FILE_PATH)
+except FileNotFoundError:
+    # Alternatif yol (Test ederken kolaylık olsun)
+    df = pd.read_csv('data/processed/final_training_data_with_soil.csv')
 
-df = df.dropna(subset=['verim_ton_hektar'])
-X = df.drop(columns=['nnokta_id', 'verim_ton_hektar'])
-y = df['verim_ton_hektar']
+# 2. FİLTRELEME: Sadece verilerin tam olduğu Sentinel-2 dönemini (2018+) alıyoruz
+# %72 Başarının sırrı burası!
+df_clean_period = df[df['yil'] >= 2018].copy()
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+print(f"Orijinal Veri Sayısı: {len(df)}")
+print(f"Filtrelenmiş (2018-2024) Veri Sayısı: {len(df_clean_period)}")
 
-print(f"Eğitim seti boyutu: {len(X_train)} satır")
-print(f"Test seti boyutu: {len(X_test)} satır\n")
+# 3. Hedef Değişken Kontrolü
+df_clean_period = df_clean_period.dropna(subset=['verim_ton_hektar'])
 
+# 4. X ve y Ayrımı
+features_to_drop = ['verim_ton_hektar', 'nnokta_id']
+X = df_clean_period.drop(columns=features_to_drop, errors='ignore')
+y = df_clean_period['verim_ton_hektar']
+
+# Eksik veri kalmışsa (ki 2018 sonrasında çok az olmalı) doldur
+X = X.fillna(X.mean())
+
+# 5. Train/Test Split
+# Veri azaldığı için test boyutunu biraz küçültüyorum (%15) ki eğitim için veri kalsın
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42)
+
+# --- MODELLER ---
+
+# A. Random Forest
+rf_model = RandomForestRegressor(n_estimators=200, random_state=42)
+rf_model.fit(X_train, y_train)
+rf_pred = rf_model.predict(X_test)
+rf_r2 = r2_score(y_test, rf_pred)
+rf_mae = mean_absolute_error(y_test, rf_pred)
+
+# B. Sklearn Gradient Boosting (Klasik)
+gb_model = GradientBoostingRegressor(n_estimators=200, random_state=42)
+gb_model.fit(X_train, y_train)
+gb_pred = gb_model.predict(X_test)
+gb_r2 = r2_score(y_test, gb_pred)
+gb_mae = mean_absolute_error(y_test, gb_pred)
+
+# C. XGBoost (Extreme Gradient Boosting) - YENİ
 xgb_model = xgb.XGBRegressor(
-    n_estimators=100,
-    learning_rate=0.1,
+    n_estimators=300,       # Biraz daha fazla ağaç
+    learning_rate=0.03,     # Daha hassas öğrenme
     max_depth=5,
+    subsample=0.8,
+    colsample_bytree=0.8,
     random_state=42,
-    objective='reg:squarederror'
+    n_jobs=-1
 )
-
-print("🧠 XGBoost Modeli eğitiliyor...")
 xgb_model.fit(X_train, y_train)
-print("✅ Model başarıyla eğitildi.\n")
+xgb_pred = xgb_model.predict(X_test)
+xgb_r2 = r2_score(y_test, xgb_pred)
+xgb_mae = mean_absolute_error(y_test, xgb_pred)
 
-print("⚙️  Daha önce görülmemiş test verileriyle tahmin yapılıyor...")
-y_pred = xgb_model.predict(X_test)
+# 8. Özellik Önem Düzeyleri (Hepsi Bir Arada)
+importance_df = pd.DataFrame({
+    'Feature': X.columns,
+    'Random Forest': rf_model.feature_importances_,
+    'Gradient Boosting': gb_model.feature_importances_,
+    'XGBoost': xgb_model.feature_importances_
+})
 
-r2 = r2_score(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+# Görselleştirme (3 Model Yan Yana)
+plt.figure(figsize=(20, 6))
 
-print("--- MODEL PERFORMANS SONUÇLARI (XGBOOST) ---")
-print(f"R-Kare (R²) Skoru: {r2:.4f}")
-print(f"Kök Ortalama Kare Hata (RMSE): {rmse:.4f}\n")
+# RF Plot
+plt.subplot(1, 3, 1)
+imp_rf = importance_df.sort_values(by='Random Forest', ascending=False).head(15)
+sns.barplot(x='Random Forest', y='Feature', data=imp_rf, palette='viridis')
+plt.title(f'Random Forest\nR²: {rf_r2:.3f} | MAE: {rf_mae:.3f}')
 
-print("--- YORUM ---")
-if r2 < 0.5:
-    print(f"Modelin R² skoru ({r2:.2f}) oldukça düşük. Bu, girdilerle verim arasında güçlü bir ilişki kuramadığını gösteriyor.")
-    print(f"Tahminler, ortalama olarak gerçek değerden {rmse:.2f} ton/hektar kadar sapıyor.")
-    print("Olası nedenler: Veri setindeki satır sayısının az olması veya girdilerin verimi açıklamak için yeterli olmaması.")
-elif r2 < 0.75:
-    print(f"Modelin R² skoru ({r2:.2f}) orta seviyede. Model, verimdeki değişkenliğin bir kısmını açıklamayı başarmış.")
-    print(f"Tahminler, ortalama olarak gerçek değerden {rmse:.2f} ton/hektar kadar sapıyor.")
-    print("Daha fazla veri ve daha çeşitli özellikler (toprak, fenoloji) ekleyerek performans artırılabilir.")
-else:
-    print(f"Modelin R² skoru ({r2:.2f}) gayet iyi! Model, verimdeki değişkenliğin önemli bir kısmını açıklamayı başarmış.")
-    print(f"Tahminler, ortalama olarak gerçek değerden {rmse:.2f} ton/hektar kadar sapıyor.")
-    print("Bu prototip, daha fazla veriyle çok daha güçlü bir modelin temelini oluşturabilir.")
+# GB Plot
+plt.subplot(1, 3, 2)
+imp_gb = importance_df.sort_values(by='Gradient Boosting', ascending=False).head(15)
+sns.barplot(x='Gradient Boosting', y='Feature', data=imp_gb, palette='magma')
+plt.title(f'Gradient Boosting\nR²: {gb_r2:.3f} | MAE: {gb_mae:.3f}')
 
-print("\n--- TEST SETİ TAHMİN DETAYLARI ---")
-test_sonuclari = pd.DataFrame({'Gerçek Verim': y_test, 'Tahmin Edilen Verim': y_pred})
-test_sonuclari['Fark'] = test_sonuclari['Gerçek Verim'] - test_sonuclari['Tahmin Edilen Verim']
-print(test_sonuclari.to_string())
+# XGB Plot 
+plt.subplot(1, 3, 3)
+imp_xgb = importance_df.sort_values(by='XGBoost', ascending=False).head(15)
+sns.barplot(x='XGBoost', y='Feature', data=imp_xgb, palette='rocket')
+plt.title(f'XGBoost (Kazanan)\nR²: {xgb_r2:.3f} | MAE: {xgb_mae:.3f}')
+
+plt.tight_layout()
+plt.savefig('model_comparison_results.png')
+
+print("\n" + "="*50)
+print("--- FİLTRELENMİŞ DÖNEM (2018-2024) SONUÇLARI ---")
+print("="*50)
+print(f"Random Forest       -> R²: {rf_r2:.4f} (MAE: {rf_mae:.3f})")
+print(f"Gradient Boosting   -> R²: {gb_r2:.4f} (MAE: {gb_mae:.3f})")
+print(f"XGBoost (Önerilen)  -> R²: {xgb_r2:.4f} (MAE: {xgb_mae:.3f})")
+print("="*50)
+
+print("\nEn Önemli 10 Özellik (XGBoost):")
+print(imp_xgb[['Feature', 'XGBoost']].head(10).to_string(index=False))

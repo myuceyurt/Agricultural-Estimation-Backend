@@ -27,8 +27,6 @@ class PredictionRequest(BaseModel):
 
 @app.post("/predict")
 def predict(request: PredictionRequest):
-    if not model:
-        return {"status": "error", "message": "Model henüz eğitilmedi veya bulunamadı."}
     
     #TODO: Prediction burada yapılacak
     

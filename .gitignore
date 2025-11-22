@@ -8,3 +8,10 @@ __pycache__/
 target/
 *.jar
 .env
+
+# build artifacts
+build/
+.gradle/
+
+# compiled Java files
+*.class
