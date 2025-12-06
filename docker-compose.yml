@@ -5,9 +5,12 @@ services:
     build: ./ai-service
     ports:
       - "8000:8000"
+    environment:
+      - PYTHONPATH=/app:/app/src
     container_name: agriculture-ai
     volumes:
       - ./ai-service:/app
+      - /home/mert/.config/earthengine:/root/.config/earthengine
 
   spring-backend:
     build: ./spring-backend

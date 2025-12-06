@@ -9,6 +9,8 @@ public record PredictionResponse(
     public record PredictionData(
         double lat,
         double lon,
-        @JsonProperty("estimated_yield") String estimatedYield
+        @JsonProperty("yield_per_hektar") String yieldPerHektar,
+        @JsonProperty("total_yield_ton") String totalYieldTon,
+        @JsonProperty("soil_included") boolean soilIncluded
     ) {}
 }

@@ -1,6 +1,7 @@
 package com.yield.prediction.controller;
 
 import com.yield.prediction.dto.PredictionRequest;
+import com.yield.prediction.dto.PredictionResponse;
 import com.yield.prediction.service.MLService;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,8 +16,7 @@ public class PredictionController {
     }
 
     @PostMapping("/predict")
-    public String makePrediction(@RequestBody PredictionRequest request) {
-        String result = mlService.getPrediction(request);
-        return result;
+    public PredictionResponse makePrediction(@RequestBody PredictionRequest request) {
+        return mlService.getPrediction(request);
     }
 }

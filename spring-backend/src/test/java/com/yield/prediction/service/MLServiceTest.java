@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.yield.prediction.dto.PredictionRequest;
+import com.yield.prediction.dto.PredictionResponse;
 
 class MLServiceTest {
     private MockWebServer mockWebServer;
@@ -51,9 +52,9 @@ class MLServiceTest {
 
         mockWebServer.enqueue(mockResponse);
         PredictionRequest request = new PredictionRequest(41.025813, 28.889179, 10.0);
-        String result = mlService.getPrediction(request);
+        PredictionResponse result = mlService.getPrediction(request);
 
-        assert result.equals("1500 kg/hektar");
+        assert result.data().yieldPerHektar().equals("1500 kg/hektar");
     }
 
     @Test

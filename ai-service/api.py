@@ -3,22 +3,12 @@ import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
+from src.predict_yield import predict_yield
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 
 app = FastAPI()
-
-MODEL_PATH = "" #TODO: Prediction model pathi eklenecek
-model = None
-
-@app.on_event("startup")
-def load_model():
-    global model
-    if os.path.exists(MODEL_PATH):
-        model = joblib.load(MODEL_PATH)
-        print("Model yüklendi.")
-    else:
-        print(f"Model bulunamadı: {MODEL_PATH}")
 
 class PredictionRequest(BaseModel):
     lat: float
@@ -28,14 +18,23 @@ class PredictionRequest(BaseModel):
 @app.post("/predict")
 def predict(request: PredictionRequest):
     
-    #TODO: Prediction burada yapılacak
+    yieldPrediction = predict_yield(request.lat, request.lon, request.hectare)    
+
+    if "error" in yieldPrediction:
+        return {
+            "status": "error", 
+            "message": yieldPrediction["error"],
+            "debug": "Check container logs for more details"
+        }
     
     return {
         "status": "success",
         "data": {
             "lat": request.lat,
             "lon": request.lon,
-            "estimated_yield": "TEST kg/hektar" 
+            "yield_per_hektar": yieldPrediction['results']['yield_per_hektar'],
+            "total_yield_ton": yieldPrediction['results']['total_yield_ton'],
+            "soil_included": yieldPrediction['factors']['soil_included']
         }
     }
 

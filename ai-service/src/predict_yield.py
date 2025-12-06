@@ -5,51 +5,17 @@ import os
 import xgboost as xgb
 from datetime import datetime
 from gee.collect_point_data import collect_point_data
-import requests
+from solidgrids.get_soil_properties_for_point import get_soil_properties_for_point
 
-MODEL_PATH = 'ai-service/data/processed/konya_bugday_modeli_xgb.joblib' 
+MODEL_PATH = '/app/data/processed/konya_bugday_modeli_xgb.joblib'
+if not os.path.exists(MODEL_PATH):
+    MODEL_PATH = 'ai-service/data/processed/konya_bugday_modeli_xgb.joblib'
+
+soilIncluded = True
 
 REFERENCE_YEAR = 2025 
 
-def get_soil_properties_for_point(lon, lat):
-    """Anlık tahmin için SoilGrids API'sini çağırır."""
-    BASE_URL = "https://rest.isric.org/soilgrids/v2.0/properties/query"
-    params = {
-        'lon': lon,
-        'lat': lat,
-        'property': ["clay", "sand", "silt", "phh2o", "cec", "soc"],
-        'depth': ["0-5cm", "5-15cm", "15-30cm"],
-        'value': ["mean"]
-    }
-    try:
-        response = requests.get(BASE_URL, params=params, timeout=10)
-        if response.status_code != 200: return None
-        data = response.json()
-    except:
-        return None
-
-    processed_data = []
-    properties = data.get('properties', {})
-    layers = properties.get('layers', [])
-
-    for layer in layers:
-        prop_name = layer.get('name', 'N/A')
-        for depth_info in layer.get('depths', []):
-            depth_label = depth_info.get('label', 'N/A')
-            val = depth_info.get('values', {}).get('mean')
-            if val is None: continue
-            
-            if prop_name in ["clay", "sand", "silt", "phh2o", "soc"]: val /= 10
-            
-            feature_name = f"soil_{prop_name}_{depth_label.replace('-', '_')}"
-            processed_data.append({'feature_name': feature_name, 'value': round(val, 2)})
-
-    if not processed_data: return None
-    
-    df = pd.DataFrame(processed_data)
-    return df.set_index('feature_name').transpose().reset_index(drop=True)
-
-def predict_field_yield(lat, lon, hectare):
+def predict_yield(lat, lon, hectare):
 
     print(f"\n🌍 ANALİZ BAŞLIYOR: {lat}, {lon} | {hectare} Hektar")
     
@@ -73,6 +39,7 @@ def predict_field_yield(lat, lon, hectare):
         full_data = pd.concat([gee_df.reset_index(drop=True), soil_df.reset_index(drop=True)], axis=1)
     else:
         print("⚠️ Toprak verisi alınamadı, sadece uydu verisi kullanılıyor.")
+        soilIncluded = False
         full_data = gee_df.copy()
         
     full_data['yil'] = REFERENCE_YEAR
@@ -120,7 +87,8 @@ def predict_field_yield(lat, lon, hectare):
         "factors": {
             "elevation": round(full_data.get('elevation', [0])[0], 1),
             "rain_may": round(full_data.get('Rain_May', [0])[0], 1),
-            "max_ndvi": round(full_data.get('NDVI_May', [0])[0], 2)
+            "max_ndvi": round(full_data.get('NDVI_May', [0])[0], 2),
+            "soil_included": soilIncluded
         }
     }
 
@@ -129,6 +97,6 @@ if __name__ == "__main__":
     test_lon = 32.90
 
     print(f"Test çalıştırılıyor... (Model Yolu: {MODEL_PATH})")
-    sonuc = predict_field_yield(test_lat, test_lon, 50)
+    sonuc = predict_yield(test_lat, test_lon, 50)
     print("\nSONUÇ:")
     print(sonuc)
