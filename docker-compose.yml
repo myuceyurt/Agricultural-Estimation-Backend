@@ -12,6 +12,19 @@ services:
       - ./ai-service:/app
       - /home/mert/.config/earthengine:/root/.config/earthengine
 
+  db:
+    image: postgres:15-alpine
+    container_name: agriculture-db
+    restart: always
+    environment:
+      - POSTGRES_USER=sitki
+      - POSTGRES_PASSWORD=osman
+      - POSTGRES_DB=agriwise_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   spring-backend:
     build: ./spring-backend
     ports:
@@ -20,5 +33,12 @@ services:
     environment:
       - PYTHON_SERVICE_URL=http://ai-service:8000
       - APP_API_KEY=1234
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/agriwise_db
+      - SPRING_DATASOURCE_USERNAME=sitki
+      - SPRING_DATASOURCE_PASSWORD=osman
     depends_on:
       - ai-service
+      - db
+
+volumes:
+  postgres_data:

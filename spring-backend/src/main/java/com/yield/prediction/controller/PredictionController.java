@@ -3,6 +3,9 @@ package com.yield.prediction.controller;
 import com.yield.prediction.dto.PredictionRequest;
 import com.yield.prediction.dto.PredictionResponse;
 import com.yield.prediction.service.MLService;
+
+import java.util.List;
+
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,4 +22,16 @@ public class PredictionController {
     public PredictionResponse makePrediction(@RequestBody PredictionRequest request) {
         return mlService.getPrediction(request);
     }
+
+    @DeleteMapping("/predictions/delete/{id}")
+    public void deletePrediction(@PathVariable Long id) {
+        mlService.deletePrediction(id);
+    }
+
+    @GetMapping("/predictions/createdAt")
+    public List<PredictionResponse> getAllPredictionsByDate() {
+        return mlService.getPredictionsByDate();
+    }
+
+
 }

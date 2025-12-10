@@ -13,6 +13,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import com.yield.prediction.dto.PredictionRequest;
 import com.yield.prediction.dto.PredictionResponse;
+import com.yield.prediction.repository.PredictionRepository;
 
 class MLServiceTest {
     private MockWebServer mockWebServer;
@@ -25,8 +26,10 @@ class MLServiceTest {
 
         String fakeBaseUrl = mockWebServer.url("/").toString();
         WebClient.Builder webClientBuilder = WebClient.builder();
+        PredictionRepository fakeRepository = null;
 
-        mlService = new MLService(webClientBuilder, fakeBaseUrl);
+
+        mlService = new MLService(webClientBuilder, fakeBaseUrl, fakeRepository);
     }
 
     @AfterEach
