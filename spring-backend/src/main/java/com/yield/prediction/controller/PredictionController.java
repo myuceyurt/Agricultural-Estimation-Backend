@@ -20,7 +20,7 @@ public class PredictionController {
 
     @PostMapping("/predict")
     public PredictionResponse makePrediction(@RequestBody PredictionRequest request) {
-        return mlService.getPrediction(request);
+        return mlService.startPrediction(request);
     }
 
     @DeleteMapping("/predictions/delete/{id}")
@@ -30,8 +30,11 @@ public class PredictionController {
 
     @GetMapping("/predictions/createdAt")
     public List<PredictionResponse> getAllPredictionsByDate() {
-        return mlService.getPredictionsByDate();
+        return mlService.getAllPredictionsByDate();
     }
 
-
+    @GetMapping("/predictions/{id}")
+    public PredictionResponse getPredictionById(@PathVariable Long id) {
+        return mlService.getPredictionById(id);
+    }
 }

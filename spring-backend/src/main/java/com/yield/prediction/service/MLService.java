@@ -37,12 +37,17 @@ public class MLService {
         deleteFromDatabase(id);
     }
 
-    public List<PredictionResponse> getPredictionsByDate() {
+    public List<PredictionResponse> getAllPredictionsByDate() {
         logger.info("Fetching all predictions ordered by creation date");
-        return getAllPredictionsByDate();
+        return getAllPredictions();
     }
 
-    public PredictionResponse getPrediction(PredictionRequest requestData) {
+    public PredictionResponse getPredictionById(Long id) {
+        logger.info("Fetching prediction for ID: {}", id);
+        return getPrediction(id);
+    }
+
+    public PredictionResponse startPrediction(PredictionRequest requestData) {
         logger.info("Initiating prediction request for Lat: {}, Lon: {}, Hectare: {}", 
                     requestData.lat(), requestData.lon(), requestData.hectare());
 
@@ -114,7 +119,21 @@ public class MLService {
         }
     }
 
-    private List<PredictionResponse> getAllPredictionsByDate() {
+    private PredictionResponse getPrediction(Long id) {
+        try {
+            Prediction prediction = predictionRepository.findById(id).orElse(null);
+            if (prediction == null) {
+                logger.warn("Prediction with ID: {} not found", id);
+                return new PredictionResponse("error", null);
+            }
+            return mapToResponse(prediction);
+        } catch (Exception e) {
+            logger.error("Failed to retrieve prediction with ID: {}", id, e);
+            return new PredictionResponse("error", null);
+        }
+    }
+
+    private List<PredictionResponse> getAllPredictions() {
         try {
             List<Prediction> predictions = predictionRepository.findAllByOrderByCreatedAtDesc();
 

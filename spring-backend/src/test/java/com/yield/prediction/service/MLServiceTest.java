@@ -55,7 +55,7 @@ class MLServiceTest {
 
         mockWebServer.enqueue(mockResponse);
         PredictionRequest request = new PredictionRequest(41.025813, 28.889179, 10.0);
-        PredictionResponse result = mlService.getPrediction(request);
+        PredictionResponse result = mlService.startPrediction(request);
 
         assert result.data().yieldPerHektar().equals("1500 kg/hektar");
     }
@@ -69,7 +69,7 @@ class MLServiceTest {
         PredictionRequest request = new PredictionRequest(41.025813, 28.889179, 10.0);
 
         assertThrows(Exception.class, () -> {
-            mlService.getPrediction(request);
+            mlService.startPrediction(request);
         });
     }
 }
